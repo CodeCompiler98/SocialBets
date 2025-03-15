@@ -3,16 +3,22 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput, Button, 
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { LineChart } from 'react-native-chart-kit';
+import { useFonts, Poppins_500Medium } from '@expo-google-fonts/poppins';
 
 const BetFeed = ({ user, token }) => {
   const [bets, setBets] = useState([]);
-  const [modalVisible, setModalVisible] = useState(false); // For creating a new bet
+  const [modalVisible, setModalVisible] = useState(false);
   const [newBet, setNewBet] = useState({ description: '', amount: '', icon: 'stats-chart' });
-  const [detailsModalVisible, setDetailsModalVisible] = useState(false); // For showing bet details
+  const [detailsModalVisible, setDetailsModalVisible] = useState(false);
   const [selectedBet, setSelectedBet] = useState(null);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
-  const [buyAmount, setBuyAmount] = useState(0);
+  const [shareCount, setShareCount] = useState(0);
+  const [selectedPosition, setSelectedPosition] = useState(null);
+
+  const [fontsLoaded] = useFonts({
+    Poppins_500Medium,
+  });
 
   useEffect(() => {
     const fetchBets = async () => {
@@ -30,12 +36,13 @@ const BetFeed = ({ user, token }) => {
   }, [user, token]);
 
   const handleAddBet = async () => {
-    if (!user || !newBet.description || !newBet.amount) {
+    if (!user || !newBet.description || !newBet.icon) {
       alert('Please fill in all fields');
       return;
     }
     try {
-      const betData = { description: newBet.description, amount: newBet.amount, icon: newBet.icon };
+      const betData = { description: newBet.description, icon: newBet.icon }; // Removed amount
+      console.log('Sending bet data:', betData);
       const response = await axios.post('http://192.168.12.248:3000/bets', betData, {
         headers: { Authorization: token },
       });
@@ -51,7 +58,6 @@ const BetFeed = ({ user, token }) => {
   const handleBetClick = async (bet) => {
     setSelectedBet(bet);
     setDetailsModalVisible(true);
-    // Fetch comments for the selected bet
     try {
       const response = await axios.get(`http://192.168.12.248:3000/bets/${bet.id}/comments`, {
         headers: { Authorization: token },
@@ -62,23 +68,33 @@ const BetFeed = ({ user, token }) => {
     }
   };
 
-  const handleBuy = async (position) => {
-    if (buyAmount <= 0) {
-      alert('Please enter a valid amount');
+  const handleSelectPosition = (position) => {
+    setSelectedPosition(position === selectedPosition ? null : position);
+  };
+
+  const handleBuy = async () => {
+    if (!selectedPosition || shareCount <= 0) {
+      alert('Please select a position and enter a valid number of shares');
       return;
     }
+    const pricePerShare = selectedPosition === 'Yes' ? selectedBet.yes_price : selectedBet.no_price;
+    const totalAmount = shareCount * pricePerShare; // Total cost in cents
     try {
       await axios.post(
         'http://192.168.12.248:3000/bets/buy',
-        { bet_id: selectedBet.id, position, amount: buyAmount },
+        { bet_id: selectedBet.id, position: selectedPosition, amount: totalAmount },
         { headers: { Authorization: token } }
       );
-      // Remove the bet from BetFeed
-      setBets(bets.filter((bet) => bet.id !== selectedBet.id));
+      const response = await axios.get('http://192.168.12.248:3000/bets', {
+        headers: { Authorization: token },
+      });
+      setBets(response.data);
       setDetailsModalVisible(false);
-      alert(`Successfully bought ${position} position for $${buyAmount / 100}`);
+      alert(`Successfully bought ${shareCount} ${selectedPosition} shares for $${totalAmount / 100}`);
+      setShareCount(0);
+      setSelectedPosition(null);
     } catch (err) {
-      console.error('Error buying position:', err);
+      console.error('Error buying shares:', err);
       alert('Failed to buy: ' + (err.response ? err.response.data : 'Network error'));
     }
   };
@@ -104,10 +120,22 @@ const BetFeed = ({ user, token }) => {
 
   const renderBetItem = ({ item }) => (
     <TouchableOpacity style={styles.betItem} onPress={() => handleBetClick(item)}>
-      <Ionicons name={item.icon} size={24} color="blue" style={styles.betIcon} />
+      <View style={styles.glow} />
+      <Ionicons name={item.icon} size={32} color="#26C6DA" style={styles.betIcon} />
       <View style={styles.betDetails}>
-        <Text style={styles.betDescription}>{item.description} (by {item.username})</Text>
-        <Text style={styles.betAmount}>{item.amount}</Text>
+        <View style={styles.titleAndOddsContainer}>
+          <Text style={styles.betTitle} numberOfLines={2} ellipsizeMode="tail">
+            {item.description}
+          </Text>
+          <View style={styles.oddsAndVolumeContainer}>
+            <Text style={styles.oddsText}>
+              {item.yes_price}%
+            </Text>
+            <Text style={styles.volumeText}>
+              Vol: ${(item.total_volume || 0) / 100}
+            </Text>
+          </View>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -122,7 +150,7 @@ const BetFeed = ({ user, token }) => {
       datasets: [
         {
           data: selectedBet.odds_history.map((entry) => entry.yes_price),
-          color: (opacity = 1) => `rgba(0, 255, 0, ${opacity})`, // Green for Yes
+          color: (opacity = 1) => `rgba(76, 175, 80, ${opacity})`,
           strokeWidth: 2,
         },
       ],
@@ -136,142 +164,66 @@ const BetFeed = ({ user, token }) => {
           width={300}
           height={200}
           chartConfig={{
-            backgroundColor: '#e26a00',
-            backgroundGradientFrom: '#fb8c00',
-            backgroundGradientTo: '#ffa726',
+            backgroundColor: '#2A2E32',
+            backgroundGradientFrom: '#2A2E32',
+            backgroundGradientTo: '#2A2E32',
             decimalPlaces: 0,
             color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-            labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+            labelColor: (opacity = 1) => `rgba(176, 190, 197, ${opacity})`,
             style: { borderRadius: 16 },
-            propsForDots: { r: '6', strokeWidth: '2', stroke: '#ffa726' },
+            propsForDots: { r: '6', strokeWidth: '2', stroke: '#4CAF50' },
           }}
           bezier
-          style={{ marginVertical: 8, borderRadius: 16 }}
+          style={{ marginVertical: 8, borderRadius: 16, shadowColor: '#000000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 4 }}
         />
       </View>
     );
   };
 
-  const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f5f5f5', paddingTop: 60 },
-    plusButton: {
-      position: 'absolute',
-      top: 10,
-      right: 10,
-      zIndex: 1,
-    },
-    modalOverlay: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    },
-    modalContainer: {
-      width: '90%',
-      maxHeight: '80%',
-      backgroundColor: 'white',
-      padding: 20,
-      borderRadius: 10,
-      elevation: 5,
-    },
-    modalTitle: {
-      fontSize: 20,
-      fontWeight: 'bold',
-      marginBottom: 15,
-      textAlign: 'center',
-    },
-    modalText: {
-      fontSize: 16,
-      marginBottom: 10,
-    },
-    input: {
-      height: 40,
-      borderColor: 'gray',
-      borderWidth: 1,
-      marginBottom: 10,
-      padding: 5,
-    },
-    modalButtons: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      marginTop: 10,
-    },
-    commentContainer: {
-      marginTop: 20,
-      borderTopWidth: 1,
-      borderTopColor: '#ddd',
-      paddingTop: 10,
-    },
-    comment: {
-      marginBottom: 10,
-      padding: 10,
-      backgroundColor: '#f9f9f9',
-      borderRadius: 5,
-    },
-    commentText: {
-      fontSize: 14,
-    },
-    commentMeta: {
-      fontSize: 12,
-      color: 'gray',
-      marginTop: 5,
-    },
-    listContainer: { paddingHorizontal: 10, paddingTop: 60 },
-    betItem: {
-      flexDirection: 'row',
-      backgroundColor: 'white',
-      borderRadius: 8,
-      padding: 10,
-      marginVertical: 5,
-      alignItems: 'center',
-      elevation: 2,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.2,
-      shadowRadius: 2,
-    },
-    betIcon: { marginRight: 10 },
-    betDetails: { flex: 1 },
-    betDescription: { fontSize: 16, fontWeight: 'bold' },
-    betAmount: { fontSize: 14, color: 'gray' },
-    emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    emptyText: { fontSize: 18, color: 'gray' },
-  });
+  if (!fontsLoaded) {
+    return null;
+  }
 
   return (
     <View style={styles.container}>
       {user && (
         <TouchableOpacity style={styles.plusButton} onPress={() => setModalVisible(true)}>
-          <Ionicons name="add-circle" size={50} color="blue" />
+          <View style={styles.glow} />
+          <Ionicons name="add-circle" size={40} color="#FFFFFF" style={styles.plusIcon} />
+          <View style={styles.buttonOutline} />
         </TouchableOpacity>
       )}
 
-      {/* Modal for Creating a New Bet */}
+      {/* Create New Bet Modal */}
       <Modal animationType="slide" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Create a New Bet</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Bet description"
-              value={newBet.description}
-              onChangeText={(text) => setNewBet({ ...newBet, description: text })}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Amount (e.g., $10)"
-              value={newBet.amount}
-              onChangeText={(text) => setNewBet({ ...newBet, amount: text })}
-            />
-            <View style={styles.modalButtons}>
-              <Button title="Cancel" onPress={() => setModalVisible(false)} color="gray" />
-              <Button title="Create Bet" onPress={handleAddBet} color="blue" />
+          <ScrollView style={styles.fullScreenModal}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Create a New Bet</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Bet description"
+                placeholderTextColor="#B0BEC5"
+                value={newBet.description}
+                onChangeText={(text) => setNewBet({ ...newBet, description: text })}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Amount (e.g., $10)"
+                placeholderTextColor="#B0BEC5"
+                value={newBet.amount}
+                onChangeText={(text) => setNewBet({ ...newBet, amount: text })}
+              />
+              <View style={styles.buttonContainer}>
+                <Button title="Cancel" onPress={() => setModalVisible(false)} color="#666" />
+                <Button title="Create Bet" onPress={handleAddBet} color="#4B0082" />
+              </View>
             </View>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
 
-      {/* Modal for Viewing Bet Details */}
+      {/* Bet Details Modal */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -279,64 +231,82 @@ const BetFeed = ({ user, token }) => {
         onRequestClose={() => setDetailsModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <ScrollView contentContainerStyle={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Bet Details</Text>
-            {selectedBet && (
-              <>
-                <Text style={styles.modalText}>Description: {selectedBet.description}</Text>
-                <Text style={styles.modalText}>Amount: {selectedBet.amount}</Text>
-                <Text style={styles.modalText}>Created by: {selectedBet.username}</Text>
-                <Text style={styles.modalText}>Icon: {selectedBet.icon}</Text>
-                {selectedBet.created_at && (
-                  <Text style={styles.modalText}>
-                    Created on: {new Date(selectedBet.created_at).toLocaleString()}
-                  </Text>
-                )}
-                <Text style={styles.modalText}>Yes Price: {selectedBet.yes_price}¢</Text>
-                <Text style={styles.modalText}>No Price: {selectedBet.no_price}¢</Text>
+          <ScrollView style={styles.fullScreenModal}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Bet Details</Text>
+              {selectedBet && (
+                <>
+                  <Text style={styles.modalText}>Description: {selectedBet.description}</Text>
+                  <Text style={styles.modalText}>Amount: {selectedBet.amount}</Text>
+                  <Text style={styles.modalText}>Created by: {selectedBet.username}</Text>
+                  <Text style={styles.modalText}>Icon: {selectedBet.icon}</Text>
+                  {selectedBet.created_at && (
+                    <Text style={styles.modalText}>
+                      Created on: {new Date(selectedBet.created_at).toLocaleString()}
+                    </Text>
+                  )}
+                  <Text style={styles.modalText}>Yes Price: {selectedBet.yes_price}¢/share</Text>
+                  <Text style={styles.modalText}>No Price: {selectedBet.no_price}¢/share</Text>
 
-                {/* Price Graph */}
-                {renderPriceGraph()}
+                  {/* Price Graph */}
+                  {renderPriceGraph()}
 
-                {/* Buy/Sell Section */}
-                <View style={{ marginTop: 20 }}>
-                  <Text style={styles.modalText}>Buy Position</Text>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
-                    <Button title={`Yes ${selectedBet.yes_price}¢`} color="green" onPress={() => handleBuy('Yes')} />
-                    <Button title={`No ${selectedBet.no_price}¢`} color="red" onPress={() => handleBuy('No')} />
-                  </View>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Amount in cents (e.g., 100 for $1)"
-                    keyboardType="numeric"
-                    value={buyAmount.toString()}
-                    onChangeText={(text) => setBuyAmount(parseInt(text) || 0)}
-                  />
-                </View>
-
-                {/* Comment Section */}
-                <View style={styles.commentContainer}>
-                  <Text style={styles.modalText}>Comments</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Add a comment"
-                    value={newComment}
-                    onChangeText={setNewComment}
-                  />
-                  <Button title="Post Comment" onPress={handleAddComment} color="blue" />
-                  {comments.map((comment) => (
-                    <View key={comment.id} style={styles.comment}>
-                      <Text style={styles.commentText}>{comment.message}</Text>
-                      <Text style={styles.commentMeta}>
-                        {comment.username} • {new Date(comment.created_at).toLocaleString()}
-                      </Text>
+                  {/* Buy Shares Section */}
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Buy Shares</Text>
+                    <View style={styles.buttonRow}>
+                      <TouchableOpacity
+                        style={[styles.positionButton, selectedPosition === 'Yes' && styles.selectedButton]}
+                        onPress={() => handleSelectPosition('Yes')}
+                      >
+                        <Text style={styles.positionButtonText}>Yes {selectedBet.yes_price}¢/share</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.positionButton, selectedPosition === 'No' && styles.selectedButton]}
+                        onPress={() => handleSelectPosition('No')}
+                      >
+                        <Text style={styles.positionButtonText}>No {selectedBet.no_price}¢/share</Text>
+                      </TouchableOpacity>
                     </View>
-                  ))}
-                </View>
-              </>
-            )}
-            <View style={styles.modalButtons}>
-              <Button title="Close" onPress={() => setDetailsModalVisible(false)} color="gray" />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Number of shares"
+                      placeholderTextColor="#B0BEC5"
+                      keyboardType="numeric"
+                      value={shareCount.toString()}
+                      onChangeText={(text) => setShareCount(parseInt(text) || 0)}
+                    />
+                    <Text style={styles.totalCostText}>
+                      Total Cost: ${(shareCount * (selectedPosition === 'Yes' ? selectedBet.yes_price : selectedPosition === 'No' ? selectedBet.no_price : 0) / 100).toFixed(2)}
+                    </Text>
+                    <Button title="Buy" onPress={handleBuy} color="#4CAF50" disabled={!selectedPosition || shareCount <= 0} />
+                  </View>
+
+                  {/* Comment Section */}
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Comments</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Add a comment"
+                      placeholderTextColor="#B0BEC5"
+                      value={newComment}
+                      onChangeText={setNewComment}
+                    />
+                    <Button title="Post Comment" onPress={handleAddComment} color="#42A5F5" />
+                    {comments.map((comment) => (
+                      <View key={comment.id} style={styles.comment}>
+                        <Text style={styles.commentText}>{comment.message}</Text>
+                        <Text style={styles.commentMeta}>
+                          {comment.username} • {new Date(comment.created_at).toLocaleString()}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              )}
+              <View style={styles.buttonContainer}>
+                <Button title="Close" onPress={() => setDetailsModalVisible(false)} color="#666" />
+              </View>
             </View>
           </ScrollView>
         </View>
@@ -357,5 +327,257 @@ const BetFeed = ({ user, token }) => {
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    position: 'relative',
+  },
+  backgroundGradientLayer1: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#1C2526',
+  },
+  backgroundGradientLayer2: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(18, 18, 18, 0.5)',
+  },
+  plusButton: {
+    position: 'absolute',
+    top: 20,
+    right: 10,
+    zIndex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#C0FF33',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  plusIcon: {
+    position: 'absolute',
+  },
+  buttonOutline: {
+    position: 'absolute',
+    top: -2,
+    left: -2,
+    right: -2,
+    bottom: -2,
+    borderWidth: 2,
+    borderColor: '#99CC00',
+    borderRadius: 30,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  fullScreenModal: {
+    flex: 1,
+  },
+  modalContent: {
+    flex: 1,
+    backgroundColor: '#2A2E32',
+    padding: 20,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    marginTop: 40,
+  },
+  modalTitle: {
+    fontSize: 24,
+    color: '#FFFFFF',
+    fontFamily: 'Poppins_500Medium',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  modalText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontFamily: 'Poppins_500Medium',
+    marginBottom: 15,
+  },
+  input: {
+    height: 50,
+    borderColor: '#26C6DA',
+    borderWidth: 1,
+    marginBottom: 10,
+    paddingHorizontal: 10,
+    color: '#FFFFFF',
+    backgroundColor: '#333',
+    borderRadius: 8,
+    fontSize: 16,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: 10,
+  },
+  section: {
+    marginVertical: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    color: '#B0BEC5',
+    fontFamily: 'Poppins_500Medium',
+    marginBottom: 10,
+  },
+  positionButton: {
+    flex: 1,
+    paddingVertical: 10,
+    marginHorizontal: 5,
+    backgroundColor: '#333',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#26C6DA',
+    alignItems: 'center',
+  },
+  selectedButton: {
+    backgroundColor: '#4CAF50',
+    borderColor: '#2E7D32',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  positionButtonText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontFamily: 'Poppins_500Medium',
+  },
+  commentContainer: {
+    marginTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#B0BEC5',
+    paddingTop: 10,
+  },
+  comment: {
+    marginBottom: 15,
+    padding: 10,
+    backgroundColor: '#333',
+    borderRadius: 8,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  commentText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontFamily: 'Poppins_500Medium',
+  },
+  commentMeta: {
+    fontSize: 12,
+    color: '#B0BEC5',
+    fontFamily: 'Poppins_500Medium',
+    marginTop: 5,
+  },
+  listContainer: {
+    paddingHorizontal: 10,
+    paddingTop: 80,
+  },
+  betItem: {
+    flexDirection: 'row',
+    backgroundColor: '#2A2E32',
+    borderRadius: 12,
+    padding: 10,
+    marginVertical: 5,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#26C6DA',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 6,
+    position: 'relative',
+    overflow: 'visible',
+  },
+  betIcon: {
+    marginRight: 10,
+  },
+  betDetails: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  titleAndOddsContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  betTitle: {
+    fontSize: 18,
+    color: '#FFFFFF',
+    fontFamily: 'Poppins_500Medium',
+    flexShrink: 1,
+    flexWrap: 'wrap',
+    maxWidth: '70%',
+  },
+  oddsAndVolumeContainer: {
+    alignItems: 'flex-end',
+  },
+  oddsText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontFamily: 'Poppins_500Medium',
+    backgroundColor: 'rgba(43, 0, 130, 0.7)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginBottom: 4,
+  },
+  volumeText: {
+    fontSize: 12,
+    color: '#B0BEC5',
+    fontFamily: 'Poppins_500Medium',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 18,
+    color: '#B0BEC5',
+    fontFamily: 'Poppins_500Medium',
+  },
+  glow: {
+    position: 'absolute',
+    bottom: -5,
+    left: 0,
+    right: 0,
+    height: 5,
+    shadowColor: '#4B0082',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.8,
+    shadowRadius: 12,
+  },
+  totalCostText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontFamily: 'Poppins_500Medium',
+    marginTop: 10,
+    textAlign: 'center',
+  },
+});
 
 export default BetFeed;

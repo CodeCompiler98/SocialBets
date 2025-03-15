@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
+import { View, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFonts, Poppins_500Medium } from '@expo-google-fonts/poppins';
 import BetFeed from './screens/BetFeed';
 import CardBattle from './screens/CardBattle';
 import CardWall from './screens/CardWall';
@@ -27,8 +31,12 @@ const TabNavigator = ({ user, token }) => (
         else if (route.name === 'Profile') iconName = 'person';
         return <Ionicons name={iconName} size={size} color={color} />;
       },
-      tabBarActiveTintColor: 'blue',
-      tabBarInactiveTintColor: 'gray',
+      tabBarActiveTintColor: '#6A0DAD', // Lime/neon green for active tabs
+      tabBarInactiveTintColor: '#B0BEC5', // Light gray for inactive tabs
+      tabBarStyle: { backgroundColor: '#1C2526' }, // Dark gray tab bar
+      headerStyle: { backgroundColor: '#1C2526' }, // Dark gray header
+      headerTintColor: '#FFFFFF', // White text/icons in header
+      headerTitleStyle: { fontFamily: 'Poppins_500Medium' },
     })}
   >
     <Tab.Screen name="BetFeed">
@@ -40,13 +48,23 @@ const TabNavigator = ({ user, token }) => (
     <Tab.Screen name="CardWall" component={CardWall} options={{ title: 'Card Wall' }} />
     <Tab.Screen name="CardBattle" component={CardBattle} options={{ title: 'Battle' }} />
     <Tab.Screen name="CommunityFeed" component={CommunityFeed} options={{ title: 'Chat Feed' }} />
-    <Tab.Screen name="Profile" component={Profile} options={{ title: 'Profile' }} />
+    <Tab.Screen name="Profile">
+      {() => <Profile user={user} token={token} />}
+    </Tab.Screen>
   </Tab.Navigator>
 );
 
 export default function App() {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
+
+  const [fontsLoaded] = useFonts({
+    Poppins_500Medium,
+  });
+
+  if (!fontsLoaded) {
+    return null;
+  }
 
   const handleLogin = (userData, userToken) => {
     console.log('handleLogin called with:', userData, userToken);
@@ -55,18 +73,28 @@ export default function App() {
   };
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator>
-        {user ? (
-          <Stack.Screen name="Main" options={{ headerShown: false }}>
-            {() => <TabNavigator user={user} token={token} />}
-          </Stack.Screen>
-        ) : (
-          <Stack.Screen name="Login" options={{ headerShown: false }}>
-            {() => <Login onLogin={handleLogin} />}
-          </Stack.Screen>
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+    <SafeAreaView style={styles.appContainer}>
+      <StatusBar style="light" backgroundColor="#1C2526" />
+      <NavigationContainer>
+        <Stack.Navigator>
+          {user ? (
+            <Stack.Screen name="Main" options={{ headerShown: false }}>
+              {() => <TabNavigator user={user} token={token} />}
+            </Stack.Screen>
+          ) : (
+            <Stack.Screen name="Login" options={{ headerShown: false }}>
+              {() => <Login onLogin={handleLogin} />}
+            </Stack.Screen>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  appContainer: {
+    flex: 1,
+    backgroundColor: '#1C2526', // Dark gray background for the entire app
+  },
+});
