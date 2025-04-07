@@ -4,7 +4,7 @@ const pool = require('./db');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
-const SECRET_KEY = '23shtr@thebx23';
+const SECRET_KEY = 'SECRET KEY HERE';
 
 app.use(express.json());
 app.use(cors());
