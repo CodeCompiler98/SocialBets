@@ -19,12 +19,12 @@ const Login = ({ onLogin }) => {
       let response;
       if (isRegistering) {
         console.log('Sending register request with data:', formData);
-        response = await axios.post('http://192.168.12.248:3000/register', formData);
+        response = await axios.post('http://localhost:3000/register', formData);
         console.log('Register response:', response.data);
         onLogin(response.data.user, response.data.token);
       } else {
         console.log('Sending login request with data:', { username: formData.username, password: formData.password });
-        response = await axios.post('http://192.168.12.248:3000/login', {
+        response = await axios.post('http://localhost:3000/login', {
           username: formData.username,
           password: formData.password,
         });
