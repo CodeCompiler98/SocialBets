@@ -16,7 +16,7 @@ const CurrentBets = ({ user, token }) => {
             alert('Not authenticated. Please log in.');
             return;
           }
-          const response = await axios.get('http://192.168.12.248:3000/user_bets', {
+          const response = await axios.get('http://localhost:3000/user_bets', {
             headers: { Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` },
           });
           console.log('Fetched user bets:', response.data);
