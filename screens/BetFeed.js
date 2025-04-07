@@ -23,7 +23,7 @@ const BetFeed = ({ user, token }) => {
   useEffect(() => {
     const fetchBets = async () => {
       try {
-        const response = await axios.get('http://192.168.12.248:3000/bets', {
+        const response = await axios.get('http://localhost:3000/bets', {
           headers: { Authorization: token },
         });
         console.log('Fetched bets:', response.data);
@@ -43,7 +43,7 @@ const BetFeed = ({ user, token }) => {
     try {
       const betData = { description: newBet.description, icon: newBet.icon }; // Removed amount
       console.log('Sending bet data:', betData);
-      const response = await axios.post('http://192.168.12.248:3000/bets', betData, {
+      const response = await axios.post('http://localhost:3000/bets', betData, {
         headers: { Authorization: token },
       });
       setBets([response.data, ...bets]);
@@ -59,7 +59,7 @@ const BetFeed = ({ user, token }) => {
     setSelectedBet(bet);
     setDetailsModalVisible(true);
     try {
-      const response = await axios.get(`http://192.168.12.248:3000/bets/${bet.id}/comments`, {
+      const response = await axios.get(`http://localhost:3000/bets/${bet.id}/comments`, {
         headers: { Authorization: token },
       });
       setComments(response.data);
@@ -81,11 +81,11 @@ const BetFeed = ({ user, token }) => {
     const totalAmount = shareCount * pricePerShare; // Total cost in cents
     try {
       await axios.post(
-        'http://192.168.12.248:3000/bets/buy',
+        'http://localhost:3000/bets/buy',
         { bet_id: selectedBet.id, position: selectedPosition, amount: totalAmount },
         { headers: { Authorization: token } }
       );
-      const response = await axios.get('http://192.168.12.248:3000/bets', {
+      const response = await axios.get('http://localhost:3000/bets', {
         headers: { Authorization: token },
       });
       setBets(response.data);
@@ -106,7 +106,7 @@ const BetFeed = ({ user, token }) => {
     }
     try {
       const response = await axios.post(
-        `http://192.168.12.248:3000/bets/${selectedBet.id}/comments`,
+        `http://localhost:3000/bets/${selectedBet.id}/comments`,
         { message: newComment },
         { headers: { Authorization: token } }
       );
